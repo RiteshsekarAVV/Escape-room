@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Escape Room — System Core Meltdown</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAYHNqpDhmP6gV7kJkhd99iIRVg0BBXIQQ",
+            authDomain: "finovate-bd452.firebaseapp.com",
+            projectId: "finovate-bd452",
+            storageBucket: "finovate-bd452.firebasestorage.app",
+            messagingSenderId: "212514953038",
+            appId: "1:212514953038:web:3cbac3bddc25854e55f01f"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        // Make Firebase available globally
+        window.db = db;
+        window.addDoc = addDoc;
+        window.collection = collection;
+        window.getDocs = getDocs;
+        window.orderBy = orderBy;
+        window.query = query;
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Fira Code', monospace;
+            background-color: #0a0a1a;
+            color: #00ffcc;
+            overflow: hidden;
+            text-shadow: 0 0 5px #00ffcc, 0 0 10px #00ffcc;
+        }
+        
+        /* Background Animation */
+        .background-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                linear-gradient(rgba(0, 255, 204, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 204, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            animation: bg-scroll 5s linear infinite;
+        }
+        @keyframes bg-scroll {
+            from { background-position: 0 0; }
+            to { background-position: -20px -20px; }
+        }
+
+        /* Glitch Effect */
+        .glitch {
+            animation: glitch-effect 1.5s infinite;
+        }
+        @keyframes glitch-effect {
+            0% { transform: translate(0); }
+            20% { transform: translate(-3px, 3px); }
+            40% { transform: translate(-3px, -3px); }
+            60% { transform: translate(3px, 3px); }
+            80% { transform: translate(3px, -3px); }
+            100% { transform: translate(0); }
+        }
+
+        /* Text Animation */
+        .text-flicker {
+            animation: flicker 2s linear infinite alternate;
+        }
+        @keyframes flicker {
+            0%, 18%, 22%, 25%, 53%, 57%, 100% {
+                text-shadow: 0 0 4px #00ffcc, 0 0 11px #00ffcc, 0 0 19px #00ffcc, 0 0 40px #00ff99, 0 0 80px #00ff99;
+                color: #ccfff5;
+            }
+            20%, 24%, 55% {
+                text-shadow: none;
+                color: #00ffcc;
+            }
+        }
+        
+        /* Input & Button Styling */
+        input[type="text"] {
+            background: rgba(0, 255, 204, 0.1);
+            border: 1px solid #00ffcc;
+            caret-color: #00ffcc;
+            transition: all 0.3s ease;
+            color: #00ffcc;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.7);
+            background: rgba(0, 255, 204, 0.15);
+        }
+        
+        .action-button {
+            background-color: #00ffcc;
+            color: #0a0a1a;
+            text-shadow: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+        }
+        .action-button:hover {
+            box-shadow: 0 0 25px rgba(0, 255, 204, 1);
+            transform: scale(1.05);
+        }
+
+        /* Progress Bar */
+        .progress-bar-inner {
+            transition: width 0.5s ease-in-out;
+            box-shadow: 0 0 10px #00ffcc, 0 0 15px #00ffcc;
+            background: linear-gradient(90deg, rgba(0,255,204,0.9), rgba(0,255,204,0.6));
+        }
+
+        /* Message Box */
+        .message-box {
+            transition: opacity 0.5s, transform 0.5s;
+            transform: translateY(20px);
+        }
+
+        /* Screen Transition Effect */
+        .screen-transition {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #00ffcc;
+            z-index: 9999;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        /* Landing adjustments */
+        #landingScreen .main-panel { max-width: 780px; }
+    </style>
+</head>
+<body class="flex items-center justify-center h-screen">
+
+    <div class="background-grid"></div>
+    <div id="screenTransition" class="screen-transition"></div>
+
+    <!-- LANDING PAGE -->
+    <div id="landingScreen" class="fixed inset-0 flex items-center justify-center z-30 p-4">
+        <div class="main-panel bg-black bg-opacity-70 border border-[#00ffcc] rounded-lg shadow-2xl p-6 w-full max-w-2xl">
+            <header class="text-center mb-4">
+                <h1 class="text-4xl font-bold text-flicker">Virtual Escape Room</h1>
+                <h2 class="text-2xl mt-2">SYSTEM CORE MELTDOWN</h2>
+                <p class="text-gray-300 mt-2">Tiny brief: You must solve 15 sequential system puzzles to stabilize the simulated core. Enter your name and roll no., then press <strong>Start</strong>. Time and mistakes are recorded on the scoreboard. Type the correct option in the box.</p>
+            </header>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">Participant Name</label>
+                    <input id="landingName" type="text" placeholder="e.g., Sarmila S." class="w-full p-3 rounded-md"/>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">Roll No.</label>
+                    <input id="landingRoll" type="text" placeholder="e.g., 21IT1001" class="w-full p-3 rounded-md"/>
+                </div>
+            </div>
+
+            <div class="mt-6 flex items-center gap-4">
+                <button id="startButton" class="action-button font-bold py-3 px-8 rounded-md">Start</button>
+                <div id="landingMessage" class="text-sm text-yellow-300 italic"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN SIM UI (kept visually same) -->
+    <main id="escapeRoomContainer" class="w-full max-w-4xl mx-auto p-4 md:p-8 bg-black bg-opacity-70 border border-[#00ffcc] rounded-lg shadow-2xl shadow-[#00ffcc]/20 z-10 hidden">
+        
+        <!-- Header -->
+        <header class="text-center mb-6 border-b-2 border-[#00ffcc]/50 pb-4 relative">
+            <h1 class="text-3xl md:text-5xl font-bold text-flicker">SYSTEM CORE MELTDOWN</h1>
+            <p class="text-red-500 text-lg mt-2 animate-pulse">[!] WARNING: CORE INTEGRITY AT <span id="integrity">100</span>% [!]</p>
+
+            <div class="absolute right-4 top-4 flex gap-2">
+                <div id="participantInfoDisplay" class="text-sm text-gray-200 italic self-center mr-2"></div>
+            </div>
+        </header>
+
+        <!-- Progress Bar -->
+        <div class="mb-6">
+            <p class="text-center mb-2">SYSTEM ACCESS PROGRESS</p>
+            <div class="w-full bg-gray-700/50 rounded-full border border-[#00ffcc]/50 h-6">
+                <div id="progressBar" class="progress-bar-inner bg-[#00ffcc] h-full rounded-full" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Puzzle Display -->
+        <div id="puzzleDisplay" class="bg-black/50 p-6 rounded-md border border-[#00ffcc]/30 min-h-[150px] flex flex-col justify-center">
+            <p id="puzzleText" class="text-lg md:text-xl whitespace-pre-wrap"></p>
+            <p id="puzzleHint" class="text-sm text-gray-400 mt-4"></p>
+        </div>
+
+        <!-- Input Area -->
+        <div class="mt-6 flex flex-col sm:flex-row items-center gap-4">
+            <span class="text-2xl font-bold text-[#00ffcc]">&gt;</span>
+            <input type="text" id="answerInput" placeholder="Enter bypass code..." class="w-full p-3 text-lg rounded-md text-[#00ffcc] focus:ring-0">
+            <button id="submitButton" class="w-full sm:w-auto action-button font-bold py-3 px-8 rounded-md">EXECUTE</button>
+        </div>
+        
+        <!-- Feedback Message / Status -->
+        <div class="mt-4 flex items-center justify-between gap-4">
+            <div id="messageBox" class="message-box text-left mt-2 h-8 text-xl font-bold opacity-0 w-2/3"></div>
+            <div class="text-right text-sm text-gray-300">
+                <div>Errors: <span id="errorCount">0</span></div>
+                <div class="mt-1">Time: <span id="elapsedTime">0.00</span>s</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Success -->
+    <div id="successScreen" class="hidden text-center z-20 p-6">
+        <h2 class="text-6xl font-bold text-flicker mb-4">SYSTEM STABILIZED</h2>
+        <p class="text-2xl mb-2">CORE MELTDOWN AVERTED</p>
+        <p class="text-lg text-gray-300">You successfully hacked the core and prevented a catastrophe.</p>
+        <p class="text-lg text-gray-300">Your final time: <span id="finalTime"></span> seconds.</p>
+        <p class="text-lg text-gray-300 mt-2">Participant: <span id="participantNameDisplay">—</span> (<span id="participantRollDisplay">—</span>)</p>
+        <div class="mt-6 flex justify-center gap-4">
+            <button id="restartButton" class="action-button font-bold py-3 px-8 rounded-md">RE-INITIALIZE SIMULATION</button>
+            <button id="backToLanding" class="py-3 px-6 rounded-md border border-[#00ffcc]/50">Change Participant</button>
+        </div>
+    </div>
+
+
+    <script>
+        /***********************
+         * Puzzles 
+         ************************/
+ const puzzles = [
+    { 
+        question: 'What does printf("%d", sizeof(3.14)); print?\n\
+a) 2\nb) 4\nc) 8\nd) Depends on compiler',
+        hint: "Hint: sizeof(3.14) gives size of double, typically 8 bytes.",
+        answer: "c"
+    },
+    { 
+        question: 'What will this print?\n\
+char *p = "CProgramming";\n\
+printf("%c", *&*&*p);\n\
+a) C\nb) P\nc) Error\nd) g',
+        hint: "Hint: *& cancels out; it just prints the first character of the string.",
+        answer: "a"
+    },
+    { 
+        question: 'What is the output?\n\
+int a = 5;\nprintf("%d", printf("%d", a));\n\
+a) 5\nb) 55\nc) 52\nd) 51',
+        hint: "Hint: Inner printf returns number of characters printed.",
+        answer: "d"
+    },
+    { 
+        question: 'What is the output?\n\
+int x = 1, y = 0;\nint z = x && y || ++y;\nprintf("%d %d %d", x, y, z);\n\
+a) 1 1 1\nb) 1 0 0\nc) 1 1 0\nd) 1 0 1',
+        hint: "Hint: Short-circuit rules for && and || affect y increment.",
+        answer: "a"
+    },
+    { 
+        question: 'What does this print?\n\
+char str[] = "Hello";\nchar *p = str;\np += 2;\nprintf("%s", p);\n\
+a) Hello\nb) llo\nc) lloHello\nd) el',
+        hint: "Hint: p+2 skips first two characters of string.",
+        answer: "b"
+    },
+    { 
+        question: 'What will be the output?\n\
+int a = 10, b = 20;\nprintf("%d", a+++b);\n\
+a) 30\nb) 31\nc) Error\nd) 10',
+        hint: "Hint: a+++b is parsed as (a++) + b.",
+        answer: "b"
+    },
+    { 
+        question: 'What is printed by this code?\n\
+int i = 5;\nprintf("%d %d %d", i, i<<1, i>>1);\n\
+a) 5 10 2\nb) 5 5 5\nc) 10 5 2\nd) Error',
+        hint: "Hint: i<<1 doubles; i>>1 halves (bitwise shifts).",
+        answer: "a"
+    },
+    { 
+        question: 'What will happen here?\n\
+int *ptr = (int*)malloc(sizeof(int));\n*ptr = 10;\nfree(ptr);\nprintf("%d", *ptr);\n\
+a) 10\nb) 0\nc) Garbage or crash\nd) Compilation error',
+        hint: "Hint: Accessing freed memory = undefined behavior.",
+        answer: "c"
+    },
+    { 
+        question: 'What will be the output?\n\
+int a = 2;\nswitch(a) {\n    case 1: printf("1");\n    case 2: printf("2");\n    case 3: printf("3");\n    default: printf("D");\n}\n\
+a) 2\nb) 23D\nc) D\nd) 123D',
+        hint: "Hint: Missing break causes fall-through from case 2.",
+        answer: "b"
+    },
+    { 
+        question: 'What is the result of this code?\n\
+int x = 0;\nif(x = 0)\n    printf("Zero");\nelse\n    printf("Non-zero");\n\
+a) Zero\nb) Non-zero\nc) Error\nd) No output',
+        hint: "Hint: Assignment (=) not comparison (==); assigns 0, condition false.",
+        answer: "b"
+    }
+];
+
+        /***********************
+         * DOM references
+         ************************/
+        const landingScreen = document.getElementById('landingScreen');
+        const landingName = document.getElementById('landingName');
+        const landingRoll = document.getElementById('landingRoll');
+        const startButton = document.getElementById('startButton');
+        const landingMessage = document.getElementById('landingMessage');
+        const escapeRoomContainer = document.getElementById('escapeRoomContainer');
+        const puzzleText = document.getElementById('puzzleText');
+        const puzzleHint = document.getElementById('puzzleHint');
+        const answerInput = document.getElementById('answerInput');
+        const submitButton = document.getElementById('submitButton');
+        const messageBox = document.getElementById('messageBox');
+        const progressBar = document.getElementById('progressBar');
+        const integrityDisplay = document.getElementById('integrity');
+        const screenTransition = document.getElementById('screenTransition');
+
+        const participantInfoDisplay = document.getElementById('participantInfoDisplay');
+        const errorCountDisplay = document.getElementById('errorCount');
+        const elapsedTimeDisplay = document.getElementById('elapsedTime');
+
+        const successScreen = document.getElementById('successScreen');
+        const finalTimeDisplay = document.getElementById('finalTime');
+        const participantNameDisplay = document.getElementById('participantNameDisplay');
+        const participantRollDisplay = document.getElementById('participantRollDisplay');
+        const restartButton = document.getElementById('restartButton');
+        const backToLanding = document.getElementById('backToLanding');
+
+        /***********************
+         * State
+         ************************/
+        let currentPuzzleIndex = 0;
+        let startTime = null;
+        let timerInterval = null;
+        let errorCount = 0;
+
+        /***********************
+         * Firebase helpers
+         ************************/
+        async function saveScoreToFirebase(participant, timeTakenSeconds, errors) {
+            try {
+                const scoreData = {
+                    name: participant.name || '—',
+                    roll: participant.roll || '—',
+                    time: parseFloat(timeTakenSeconds),
+                    errors: errors,
+                    date: new Date().toISOString(),
+                    room: 'room1'
+                };
+                await window.addDoc(window.collection(window.db, 'room1_scores'), scoreData);
+                console.log('Score saved to Firebase');
+            } catch (error) {
+                console.error('Error saving score to Firebase:', error);
+            }
+        }
+
+        /***********************
+         * UI / Game functions
+         ************************/
+        function showLanding(message = '') {
+            landingScreen.classList.remove('hidden');
+            escapeRoomContainer.classList.add('hidden');
+            successScreen.classList.add('hidden');
+            if (message) {
+                landingMessage.textContent = message;
+                setTimeout(() => landingMessage.textContent = '', 2500);
+            }
+        }
+
+        function startGame() {
+            const name = landingName.value.trim();
+            const roll = landingRoll.value.trim();
+            if (!name || !roll) {
+                landingMessage.textContent = "Please enter both name and roll no.";
+                setTimeout(() => landingMessage.textContent = '', 2000);
+                return;
+            }
+            const participant = { name, roll };
+            participantInfoDisplay.textContent = `Player: ${participant.name} (${participant.roll})`;
+
+            // show main UI
+            landingScreen.classList.add('hidden');
+            escapeRoomContainer.classList.remove('hidden');
+            successScreen.classList.add('hidden');
+
+            // init
+            currentPuzzleIndex = 0;
+            errorCount = 0;
+            updateErrorDisplay();
+            updateProgressBar();
+            displayPuzzle(currentPuzzleIndex);
+            answerInput.value = '';
+            answerInput.focus();
+            submitButton.disabled = false;
+
+            // timer
+            startTime = Date.now();
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+                elapsedTimeDisplay.textContent = elapsed;
+            }, 100);
+        }
+
+        function displayPuzzle(index) {
+            puzzleText.textContent = puzzles[index].question;
+            puzzleHint.textContent = puzzles[index].hint;
+        }
+
+        function showMessage(text, isError = false) {
+            messageBox.textContent = text;
+            messageBox.style.color = isError ? '#ff4d4d' : '#00ffcc';
+            messageBox.style.opacity = '1';
+            messageBox.style.transform = 'translateY(0)';
+            setTimeout(() => {
+                messageBox.style.opacity = '0';
+                messageBox.style.transform = 'translateY(20px)';
+            }, 2000);
+        }
+
+        function updateProgressBar() {
+            const progress = (currentPuzzleIndex / puzzles.length) * 100;
+            progressBar.style.width = `${progress}%`;
+            const integrity = 100 - progress;
+            integrityDisplay.textContent = `${Math.round(integrity)}`;
+        }
+
+        function triggerScreenGlitch() {
+            screenTransition.style.opacity = '1';
+            setTimeout(() => {
+                screenTransition.style.opacity = '0';
+            }, 150);
+        }
+
+        function updateErrorDisplay() {
+            errorCountDisplay.textContent = errorCount;
+        }
+
+        function handleSubmission() {
+            const userAnswer = answerInput.value.trim();
+            const correctAnswer = puzzles[currentPuzzleIndex].answer;
+
+            if (userAnswer.toLowerCase() === correctAnswer.toLowerCase()) {
+                showMessage("ACCESS GRANTED. LOADING NEXT PROTOCOL...", false);
+                submitButton.disabled = true;
+                // small animation & transition
+                setTimeout(() => {
+                    triggerScreenGlitch();
+                }, 150);
+
+                setTimeout(() => {
+                    currentPuzzleIndex++;
+                    updateProgressBar();
+                    if (currentPuzzleIndex < puzzles.length) {
+                        displayPuzzle(currentPuzzleIndex);
+                        answerInput.value = '';
+                        answerInput.focus();
+                        submitButton.disabled = false;
+                    } else {
+                        // finished
+                        if (timerInterval) clearInterval(timerInterval);
+                        const timeTaken = ((Date.now() - startTime) / 1000).toFixed(2);
+                        finalTimeDisplay.textContent = timeTaken;
+                        
+                        // Get participant info from current session
+                        const participant = {
+                            name: landingName.value.trim(),
+                            roll: landingRoll.value.trim()
+                        };
+                        participantNameDisplay.textContent = participant.name || '—';
+                        participantRollDisplay.textContent = participant.roll || '—';
+
+                        // Save score to Firebase
+                        saveScoreToFirebase(participant, timeTaken, errorCount);
+
+                        progressBar.style.width = `100%`;
+                        integrityDisplay.textContent = '0';
+                        escapeRoomContainer.classList.add('hidden');
+                        successScreen.classList.remove('hidden');
+                    }
+                }, 600);
+            } else {
+                errorCount++;
+                updateErrorDisplay();
+                showMessage("ERROR: BYPASS CODE INVALID. ATTEMPT LOGGED.", true);
+                escapeRoomContainer.classList.add('glitch');
+                setTimeout(() => {
+                    escapeRoomContainer.classList.remove('glitch');
+                }, 750);
+            }
+        }
+
+
+        /***********************
+         * Events
+         ************************/
+        startButton.addEventListener('click', startGame);
+        submitButton.addEventListener('click', handleSubmission);
+        answerInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSubmission());
+
+        restartButton.addEventListener('click', () => {
+            successScreen.classList.add('hidden');
+            roomTransition(); // small glitch
+            setTimeout(() => {
+                startGame();
+            }, 350);
+        });
+
+        backToLanding.addEventListener('click', () => {
+            successScreen.classList.add('hidden');
+            showLanding();
+        });
+
+        // helper glitch transition wrapper
+        function roomTransition() {
+            screenTransition.style.opacity = '1';
+            setTimeout(() => { screenTransition.style.opacity = '0'; }, 150);
+        }
+
+        // on load
+        window.addEventListener('load', () => {
+            showLanding();
+        });
+
+    </script>
+</body>
+</html>
+
